@@ -80,4 +80,4 @@ node index.js
 
 ---
 
-Built by Abdullah — Grade 12 student from Qatar 🇶🇦
+

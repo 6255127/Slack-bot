@@ -144,15 +144,14 @@ app.command("/zenith-planet", async ({ command, ack, respond }) => {
 });
 
 // epic -- earth photo from nasa's EPIC camera (DSCOVR satellite)
+// note: api.nasa.gov just redirects here so we hit it directly to avoid issues
 app.command("/zenith-earth", async ({ ack, respond }) => {
   await ack();
   try {
-    const res = await axios.get(
-      `https://api.nasa.gov/EPIC/api/natural/images?api_key=${NASA}`
-    );
-    const latest = res.data[0];
+    const res = await axios.get("https://epic.gsfc.nasa.gov/api/natural");
+    const latest = res.data[res.data.length - 1]; // most recent image
     const date = latest.date.split(" ")[0].replace(/-/g, "/");
-    const imageUrl = `https://api.nasa.gov/EPIC/archive/natural/${date}/png/${latest.image}.png?api_key=${NASA}`;
+    const imageUrl = `https://epic.gsfc.nasa.gov/archive/natural/${date}/png/${latest.image}.png`;
     await respond(
       `*Earth right now, seen from space*\nCaptured: ${latest.date}\n${imageUrl}`
     );

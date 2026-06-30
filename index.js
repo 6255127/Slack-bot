@@ -3,7 +3,7 @@ const { App } = require("@slack/bolt");
 const axios = require("axios");
 const cron = require("node-cron");
 
-// nasa key from env or fallback
+// nasa key from env or fallback to demo (rate limited)
 const NASA = process.env.NASA_API_KEY || "DEMO_KEY";
 
 // boot up the bot in socket mode -- no public url needed
@@ -21,15 +21,12 @@ function today() {
 }
 
 // ------------------------------------------------
-// daily digest -- pulls data from multiple apis
-// and posts a summary to #space-alerts every morning
+// daily digest -- pulls data and posts every morning
 // ------------------------------------------------
 async function sendDailyReport(channel) {
   try {
-    // grab all three at the same time to save time
-    const [apod, spacex, astronauts] = await Promise.all([
+    const [apod, astronauts] = await Promise.all([
       axios.get(`https://api.nasa.gov/planetary/apod?api_key=${NASA}`),
-      axios.get("https://api.spacexdata.com/v4/launches/latest"),
       axios.get("http://api.open-notify.org/astros.json"),
     ]);
 
@@ -39,11 +36,6 @@ async function sendDailyReport(channel) {
 *Astronomy Picture of the Day*
 ${apod.data.title}
 ${apod.data.url}
-
-*Latest SpaceX Launch*
-Mission: ${spacex.data.name}
-Date: ${new Date(spacex.data.date_utc).toDateString()}
-Success: ${spacex.data.success ? "Yes" : "No"}
 
 *People in Space right now*
 ${astronauts.data.number} astronauts aboard various spacecraft
@@ -93,55 +85,6 @@ app.command("/zenith-iss", async ({ ack, respond }) => {
     );
   } catch (e) {
     await respond("Couldnt fetch ISS location right now.");
-  }
-});
-
-// spacex -- latest launch info
-app.command("/zenith-spacex", async ({ ack, respond }) => {
-  await ack();
-  try {
-    const res = await axios.get(
-      "https://api.spacexdata.com/v4/launches/latest"
-    );
-    const l = res.data;
-    await respond(
-      `*Latest SpaceX Launch*\nName: ${l.name}\nDate: ${new Date(l.date_utc).toDateString()}\nSuccess: ${l.success ? "Yes" : "No"}\nDetails: ${l.details || "No details available"}`
-    );
-  } catch (e) {
-    await respond("Couldnt fetch SpaceX data.");
-  }
-});
-
-// next launch -- whats coming up
-app.command("/zenith-nextlaunch", async ({ ack, respond }) => {
-  await ack();
-  try {
-    const res = await axios.get("https://api.spacexdata.com/v4/launches/next");
-    const l = res.data;
-    const diff = Math.round(
-      (new Date(l.date_utc) - new Date()) / 1000 / 60 / 60
-    );
-    await respond(
-      `*Next SpaceX Launch*\nMission: ${l.name}\nDate: ${new Date(l.date_utc).toDateString()}\nIn about: ${diff} hours`
-    );
-  } catch (e) {
-    await respond("Couldnt fetch next launch info.");
-  }
-});
-
-// mars -- latest curiosity rover photo
-app.command("/zenith-mars", async ({ ack, respond }) => {
-  await ack();
-  try {
-    const res = await axios.get(
-      `https://api.nasa.gov/mars-photos/api/v1/rovers/curiosity/latest_photos?api_key=${NASA}`
-    );
-    const photo = res.data.latest_photos[0];
-    await respond(
-      `Mars Rover: ${photo.rover.name}\nSol: ${photo.sol}\nCamera: ${photo.camera.full_name}\nPhoto: ${photo.img_src}`
-    );
-  } catch (e) {
-    await respond("Couldnt fetch Mars photos.");
   }
 });
 
@@ -200,16 +143,71 @@ app.command("/zenith-planet", async ({ command, ack, respond }) => {
   );
 });
 
+// epic -- earth photo from nasa's EPIC camera (DSCOVR satellite)
+app.command("/zenith-earth", async ({ ack, respond }) => {
+  await ack();
+  try {
+    const res = await axios.get(
+      `https://api.nasa.gov/EPIC/api/natural/images?api_key=${NASA}`
+    );
+    const latest = res.data[0];
+    const date = latest.date.split(" ")[0].replace(/-/g, "/");
+    const imageUrl = `https://api.nasa.gov/EPIC/archive/natural/${date}/png/${latest.image}.png?api_key=${NASA}`;
+    await respond(
+      `*Earth right now, seen from space*\nCaptured: ${latest.date}\n${imageUrl}`
+    );
+  } catch (e) {
+    await respond("Couldnt fetch Earth image right now.");
+  }
+});
+
+// neo-lookup -- biggest asteroid approaching this week
+app.command("/zenith-neo-week", async ({ ack, respond }) => {
+  await ack();
+  try {
+    const start = new Date();
+    const end = new Date();
+    end.setDate(end.getDate() + 7);
+    const startStr = start.toISOString().split("T")[0];
+    const endStr = end.toISOString().split("T")[0];
+
+    const res = await axios.get(
+      `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startStr}&end_date=${endStr}&api_key=${NASA}`
+    );
+
+    // flatten all asteroids from all days into one list
+    const allAsteroids = Object.values(res.data.near_earth_objects).flat();
+
+    // find the biggest one by max diameter
+    const biggest = allAsteroids.reduce((max, a) => {
+      const size = a.estimated_diameter.meters.estimated_diameter_max;
+      const maxSize = max.estimated_diameter.meters.estimated_diameter_max;
+      return size > maxSize ? a : max;
+    }, allAsteroids[0]);
+
+    const sizeM = Math.round(
+      biggest.estimated_diameter.meters.estimated_diameter_max
+    );
+    const closeApproach = biggest.close_approach_data[0];
+
+    await respond(
+      `*Biggest asteroid this week*\nName: ${biggest.name}\nEstimated size: up to ${sizeM}m wide\nCloses approach: ${closeApproach.close_approach_date}\nHazardous: ${biggest.is_potentially_hazardous_asteroid ? "Yes" : "No"}`
+    );
+  } catch (e) {
+    await respond("Couldnt fetch weekly asteroid data.");
+  }
+});
+
 // space-report -- quick summary of whats happening
 app.command("/zenith-space-report", async ({ ack, respond }) => {
   await ack();
   try {
-    const [spacex, astronauts] = await Promise.all([
-      axios.get("https://api.spacexdata.com/v4/launches/latest"),
+    const [apod, astronauts] = await Promise.all([
+      axios.get(`https://api.nasa.gov/planetary/apod?api_key=${NASA}`),
       axios.get("http://api.open-notify.org/astros.json"),
     ]);
     await respond(
-      `*Space Report*\nLatest Launch: ${spacex.data.name}\nPeople in Space: ${astronauts.data.number}\nStatus: All systems nominal`
+      `*Space Report*\nToday's Photo: ${apod.data.title}\nPeople in Space: ${astronauts.data.number}\nStatus: All systems nominal`
     );
   } catch (e) {
     await respond("Couldnt generate space report.");
@@ -224,11 +222,10 @@ app.command("/zenith-help", async ({ ack, respond }) => {
 /zenith-ping          Check if bot is online
 /zenith-apod          Astronomy Picture of the Day
 /zenith-iss           Live ISS location on map
-/zenith-spacex        Latest SpaceX launch info
-/zenith-nextlaunch    Next upcoming SpaceX launch
-/zenith-mars          Latest Mars rover photo
 /zenith-astronauts    Who is in space right now
 /zenith-asteroids     Near Earth asteroids today
+/zenith-neo-week      Biggest asteroid approaching this week
+/zenith-earth         Latest Earth photo from space
 /zenith-space-report  Quick space summary
 /zenith-planet [name] Facts about a planet
 /zenith-help          Show this menu`);
@@ -241,25 +238,6 @@ app.command("/zenith-help", async ({ ack, respond }) => {
 // daily report at 8am UTC every day
 cron.schedule("0 8 * * *", () => {
   sendDailyReport("#space-alerts");
-});
-
-// check every 30 min if a launch is within 1 hour
-cron.schedule("*/30 * * * *", async () => {
-  try {
-    const res = await axios.get("https://api.spacexdata.com/v4/launches/next");
-    const launch = res.data;
-    const minsLeft = (new Date(launch.date_utc) - new Date()) / 60000;
-
-    // only alert when between 55-60 mins away so we dont spam
-    if (minsLeft < 60 && minsLeft > 55) {
-      await app.client.chat.postMessage({
-        channel: "#space-alerts",
-        text: `Launch in ~1 hour: ${launch.name}`,
-      });
-    }
-  } catch (e) {
-    // silently fail, dont want cron errors spamming logs
-  }
 });
 
 // hourly asteroid danger check
@@ -278,7 +256,7 @@ cron.schedule("0 * * * *", async () => {
       });
     }
   } catch (e) {
-    // silently fail
+    // silently fail, dont want cron errors spamming logs
   }
 });
 

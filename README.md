@@ -3,6 +3,7 @@
 I built a Slack bot to bring space data into your workspace. Type a command, get real-time info on SpaceX launches, the ISS, NASA photos, asteroids, whatever is going up there right now.
  
 Been watching spacex launches for years and wanted to combine that with coding so here we are
+
 Commands :
 `/zenith-ping` - check if its alive
  
@@ -28,6 +29,7 @@ Commands :
 
  
 Posts a daily digest to #space-alerts every morning at 8am, and pings the channel an hour before any SpaceX launch.
+
 Built with:
 Node.js, Slack’s Bolt library, NASA’s API, SpaceX’s API. Runs on Hack Club Nest 24/7 with systemd.
  

@@ -1,8 +1,7 @@
 # Zenith 🚀
  
-I built a Slack bot to bring space data into your workspace. Type a command, get real-time info on the ISS, NASA photos, asteroids, whatever is happening up there right now.
+I built a Slack bot . Type a command, get real-time info on the ISS, NASA photos, asteroids, whatever is happening up there right now.
  
-Been watching SpaceX launches for years and wanted to combine that with coding, so here we are.
  
 ## Commands
  
@@ -30,8 +29,4 @@ Been watching SpaceX launches for years and wanted to combine that with coding, 
  
 Posts a daily digest to #space-alerts every morning at 8am.
  
-## Built with
- 
-Node.js, Slack's Bolt library, NASA's API. Runs on Hack Club Nest 24/7 with systemd.
- 
----
+
